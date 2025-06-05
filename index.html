@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Трекер доходности инвестиций</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = Recharts;
+
+    const TrendingUpIcon = () => <span style={{ fontSize: '18px' }}>📈</span>;
+
+    const InvestmentTracker = () => {
+      const [savingsAccount, setSavingsAccount] = useState({
+        balance: 100000,
+        rate: 5.5,
+        entries: [
+          { date: '2024-01-01', amount: 100000, type: 'deposit', description: 'Начальный депозит' }
+        ]
+      });
+
+      const [stocks, setStocks] = useState([
+        { id: 1, name: 'Сбербанк', ticker: 'SBER', shares: 100, buyPrice: 250, currentPrice: 280, date: '2024-01-15' },
+        { id: 2, name: 'Газпром', ticker: 'GAZP', shares: 50, buyPrice: 180, currentPrice: 165, date: '2024-02-01' }
+      ]);
+
+      const savingsData = useMemo(() => {
+        let balance = 0;
+        const sorted = [...savingsAccount.entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+        return sorted.map(entry => {
+          balance += entry.type === 'deposit' ? entry.amount : -entry.amount;
+          return { date: entry.date, balance };
+        });
+      }, [savingsAccount.entries]);
+
+      const stocksData = useMemo(() => {
+        return stocks.map(stock => {
+          const totalCost = stock.shares * stock.buyPrice;
+          const currentValue = stock.shares * stock.currentPrice;
+          const profit = currentValue - totalCost;
+          return {
+            ...stock,
+            totalCost,
+            currentValue,
+            profit
+          };
+        });
+      }, [stocks]);
+
+      const portfolioData = [
+        { name: 'Накопительный счёт', value: savingsAccount.balance, color: '#8884d8' },
+        { name: 'Акции', value: stocksData.reduce((sum, s) => sum + s.currentValue, 0), color: '#82ca9d' }
+      ];
+
+      return (
+        <div className="max-w-4xl mx-auto p-4">
+          <div className="bg-white p-6 rounded shadow mb-6">
+            <h1 className="text-2xl font-bold mb-2 flex items-center gap-2">
+              <TrendingUpIcon /> Трекер доходности инвестиций
+            </h1>
+            <p className="text-gray-600">Учёт доходности накопительного счёта и акций</p>
+          </div>
+
+          <div className="bg-white p-6 rounded shadow mb-6">
+            <h2 className="text-xl font-semibold mb-4">Накопительный счёт</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={savingsData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="balance" stroke="#8884d8" />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="bg-white p-6 rounded shadow mb-6">
+            <h2 className="text-xl font-semibold mb-4">Портфель</h2>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={portfolioData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  label
+                >
+                  {portfolioData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<InvestmentTracker />);
+  </script>
+</body>
+</html>
