@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Трекер доходности инвестиций</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.0.9/recharts.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+    const Recharts = window.Recharts;
+
+    if (typeof Recharts === 'undefined' || !Recharts.LineChart) {
+      console.error("Recharts is not properly loaded or accessible.");
+    }
+
+    const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = Recharts || {};
+
+    const PlusIcon = () => <span style={{ fontSize: '16px' }}>➕</span>;
+    const TrashIcon = () => <span style={{ fontSize: '16px' }}>🗑️</span>;
+    const TrendingUpIcon = () => <span style={{ fontSize: '16px' }}>📈</span>;
+    const DollarIcon = () => <span style={{ fontSize: '16px' }}>💰</span>;
+    const CalculatorIcon = () => <span style={{ fontSize: '16px' }}>🧮</span>;
+
+    const InvestmentTracker = () => {
+      const [savingsAccount, setSavingsAccount] = useState({
+        balance: 100000,
+        rate: 5.5,
+        entries: [{ date: '2024-01-01', amount: 100000, type: 'deposit', description: 'Начальный депозит' }]
+      });
+
+      const [stocks, setStocks] = useState([
+        { id: 1, name: 'Сбербанк', ticker: 'SBER', shares: 100, buyPrice: 250, currentPrice: 280, date: '2024-01-15' },
+        { id: 2, name: 'Газпром', ticker: 'GAZP', shares: 50, buyPrice: 180, currentPrice: 165, date: '2024-02-01' }
+      ]);
+
+      const [newStock, setNewStock] = useState({ name: '', ticker: '', shares: '', buyPrice: '', currentPrice: '', date: '' });
+      const [newSavingsEntry, setNewSavingsEntry] = useState({ date: '', amount: '', type: 'deposit', description: '' });
+      const [activeTab, setActiveTab] = useState('savings');
+
+      useEffect(() => {
+        const calculatedBalance = savingsAccount.entries.reduce((acc, entry) =>
+          entry.type === 'deposit' ? acc + entry.amount : acc - entry.amount, 0);
+        setSavingsAccount(prev => ({ ...prev, balance: calculatedBalance }));
+      }, [savingsAccount.entries]);
+
+      const savingsData = useMemo(() => {
+        let balance = 0;
+        const sortedEntries = [...savingsAccount.entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+        return sortedEntries.map(entry => {
+          balance += entry.type === 'deposit' ? entry.amount : -entry.amount;
+          return { date: entry.date, balance: balance };
+        });
+      }, [savingsAccount.entries]);
+
+      const stocksData = useMemo(() => {
+        return stocks.map(stock => {
+          const totalCost = stock.shares * stock.buyPrice;
+          const currentValue = stock.shares * stock.currentPrice;
+          const profit = currentValue - totalCost;
+          const profitPercent = (profit / totalCost) * 100;
+          return { ...stock, totalCost, currentValue, profit, profitPercent };
+        });
+      }, [stocks]);
+
+      const totalStockValue = stocksData.reduce((sum, stock) => sum + stock.currentValue, 0);
+      const totalStockCost = stocksData.reduce((sum, stock) => sum + stock.totalCost, 0);
+      const totalStockProfit = totalStockValue - totalStockCost;
+      const currentSavingsBalance = savingsAccount.balance;
+
+      const portfolioData = [
+        { name: 'Накопительный счёт', value: currentSavingsBalance, color: '#8884d8' },
+        { name: 'Акции', value: totalStockValue, color: '#82ca9d' }
+      ];
+
+      const addSavingsEntry = () => {
+        if (newSavingsEntry.date && newSavingsEntry.amount) {
+          const newEntries = [...savingsAccount.entries, { ...newSavingsEntry, amount: parseFloat(newSavingsEntry.amount) }];
+          setSavingsAccount({ ...savingsAccount, entries: newEntries });
+          setNewSavingsEntry({ date: '', amount: '', type: 'deposit', description: '' });
+        } else {
+          alert('Пожалуйста, заполните дату и сумму для операции.');
+        }
+      };
+
+      const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('ru-RU', {
+          style: 'currency',
+          currency: 'RUB',
+          minimumFractionDigits: 0
+        }).format(amount);
+      };
+
+      return (
+        <div className="max-w-4xl mx-auto p-6 bg-gray-50 min-h-screen">
+          <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <CalculatorIcon />
+            Трекер доходности инвестиций
+          </h1>
+
+          <div className="mb-6">
+            <button onClick={() => setActiveTab('savings')} className={`px-4 py-2 mr-2 rounded ${activeTab === 'savings' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
+              Накопительный счёт
+            </button>
+            <button onClick={() => setActiveTab('overview')} className={`px-4 py-2 rounded ${activeTab === 'overview' ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
+              Обзор
+            </button>
+          </div>
+
+          {activeTab === 'savings' && (
+            <div className="bg-white p-6 rounded shadow space-y-6">
+              <div>
+                <h2 className="text-lg font-semibold mb-4">Добавить операцию</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <input type="date" value={newSavingsEntry.date} onChange={(e) => setNewSavingsEntry({ ...newSavingsEntry, date: e.target.value })} className="p-2 border rounded" />
+                  <input type="number" placeholder="Сумма" value={newSavingsEntry.amount} onChange={(e) => setNewSavingsEntry({ ...newSavingsEntry, amount: e.target.value })} className="p-2 border rounded" />
+                  <select value={newSavingsEntry.type} onChange={(e) => setNewSavingsEntry({ ...newSavingsEntry, type: e.target.value })} className="p-2 border rounded">
+                    <option value="deposit">Депозит</option>
+                    <option value="withdrawal">Снятие</option>
+                  </select>
+                  <input type="text" placeholder="Описание" value={newSavingsEntry.description} onChange={(e) => setNewSavingsEntry({ ...newSavingsEntry, description: e.target.value })} className="p-2 border rounded" />
+                </div>
+                <button onClick={addSavingsEntry} className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                  <PlusIcon /> <span className="ml-1">Добавить</span>
+                </button>
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold mb-2">История операций</h2>
+                <ul className="divide-y divide-gray-200">
+                  {savingsAccount.entries.map((entry, index) => (
+                    <li key={index} className="py-2 flex justify-between text-sm">
+                      <span>{entry.date} — {entry.description}</span>
+                      <span className={entry.type === 'deposit' ? 'text-green-600' : 'text-red-600'}>
+                        {entry.type === 'deposit' ? '+' : '-'}{formatCurrency(entry.amount)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'overview' && (
+            <div className="bg-white p-6 rounded shadow">
+              <h2 className="text-xl font-semibold mb-4">Обзор портфеля</h2>
+              <p className="mb-2 font-medium">Общий баланс: {formatCurrency(currentSavingsBalance + totalStockValue)}</p>
+              <p className="mb-2">Накопительный счёт: {formatCurrency(currentSavingsBalance)}</p>
+              <p className="mb-2">Акции: {formatCurrency(totalStockValue)} (прибыль: {formatCurrency(totalStockProfit)})</p>
+              <div style={{ height: 300 }}>
+                {PieChart && Pie && Cell ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={portfolioData} dataKey="value" cx="50%" cy="50%" outerRadius={80} label>
+                        {portfolioData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(value)} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-red-600">Не удалось загрузить график (Recharts не найден).</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<InvestmentTracker />);
+  </script>
+</body>
+</html>
+
