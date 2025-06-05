@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Трекер доходности инвестиций</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.0.9/recharts.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+        
+        // Попытка получить Recharts из window, если он там есть
+        // Если это не сработает, Recharts не выставляет себя в глобальную переменную 'Recharts'
+        const Recharts = window.Recharts;
+
+        // Если Recharts все еще undefined, нужно будет пересмотреть подход
+        if (typeof Recharts === 'undefined' || !Recharts.LineChart) {
+            console.error("Recharts is not properly loaded or accessible. Please check the CDN link and Recharts documentation for direct browser usage.");
+            // Можно вывести сообщение пользователю или заглушку
+            // Например: ReactDOM.createRoot(document.getElementById('root')).render(<div>Ошибка загрузки графиков</div>);
+            // Чтобы не ломалось дальше, можно выйти или не рендерить компоненты Recharts
+        }
+
+        // Если Recharts загружен, деструктурируем компоненты
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } = Recharts || {};
+        // Добавил || {} на случай, если Recharts все же undefined, чтобы не было ошибки при деструктуризации
+        
+        // Иконки (упрощенные)
+        const PlusIcon = () => <span style={{fontSize: '16px'}}>➕</span>;
+        const TrashIcon = () => <span style={{fontSize: '16px'}}>🗑️</span>;
+        const TrendingUpIcon = () => <span style={{fontSize: '16px'}}>📈</span>;
+        const DollarIcon = () => <span style={{fontSize: '16px'}}>💰</span>;
+        const CalculatorIcon = () => <span style={{fontSize: '16px'}}>🧮</span>;
+
+        const InvestmentTracker = () => {
+            const [savingsAccount, setSavingsAccount] = useState({
+                balance: 100000,
+                rate: 5.5,
+                entries: [
+                    { date: '2024-01-01', amount: 100000, type: 'deposit', description: 'Начальный депозит' }
+                ]
+            });
+
+            const [stocks, setStocks] = useState([
+                { id: 1, name: 'Сбербанк', ticker: 'SBER', shares: 100, buyPrice: 250, currentPrice: 280, date: '2024-01-15' },
+                { id: 2, name: 'Газпром', ticker: 'GAZP', shares: 50, buyPrice: 180, currentPrice: 165, date: '2024-02-01' }
+            ]);
+
+            const [newStock, setNewStock] = useState({
+                name: '', ticker: '', shares: '', buyPrice: '', currentPrice: '', date: ''
+            });
+
+            const [newSavingsEntry, setNewSavingsEntry] = useState({
+                date: '', amount: '', type: 'deposit', description: ''
+            });
+
+            const [activeTab, setActiveTab] = useState('overview');
+
+            useEffect(() => {
+                const calculatedBalance = savingsAccount.entries.reduce((acc, entry) => {
+                    return entry.type === 'deposit' ? acc + entry.amount : acc - entry.amount;
+                }, 0);
+                setSavingsAccount(prev => ({ ...prev, balance: calculatedBalance }));
+            }, [savingsAccount.entries]);
+
+            const savingsData = useMemo(() => {
+                let balance = 0;
+                const sortedEntries = [...savingsAccount.entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                return sortedEntries.map(entry => {
+                    balance += entry.type === 'deposit' ? entry.amount : -entry.amount;
+                    return {
+                        date: entry.date,
+                        balance: balance,
+                    };
+                });
+            }, [savingsAccount.entries]);
+
+            const stocksData = useMemo(() => {
+                return stocks.map(stock => {
+                    const totalCost = stock.shares * stock.buyPrice;
+                    const currentValue = stock.shares * stock.currentPrice;
+                    const profit = currentValue - totalCost;
+                    const profitPercent = (profit / totalCost) * 100;
+                    
+                    return {
+                        ...stock,
+                        totalCost,
+                        currentValue,
+                        profit,
+                        profitPercent
+                    };
+                });
+            }, [stocks]);
+
+            const totalStockValue = stocksData.reduce((sum, stock) => sum + stock.currentValue, 0);
+            const totalStockCost = stocksData.reduce((sum, stock) => sum + stock.totalCost, 0);
+            const totalStockProfit = totalStockValue - totalStockCost;
+            const currentSavingsBalance = savingsAccount.balance;
+
+            const portfolioData = [
+                { name: 'Накопительный счёт', value: currentSavingsBalance, color: '#8884d8' },
+                { name: 'Акции', value: totalStockValue, color: '#82ca9d' }
+            ];
+
+            const addStock = () => {
+                if (newStock.name && newStock.ticker && newStock.shares && newStock.buyPrice && newStock.currentPrice && newStock.date) {
+                    setStocks([...stocks, {
+                        ...newStock,
+                        id: Date.now(),
+                        shares: parseFloat(newStock.shares),
+                        buyPrice: parseFloat(newStock.buyPrice),
+                        currentPrice: parseFloat(newStock.currentPrice)
+                    }]);
+                    setNewStock({ name: '', ticker: '', shares: '', buyPrice: '', currentPrice: '', date: '' });
+                } else {
+                    alert('Пожалуйста, заполните все поля для акции.');
+                }
+            };
+
+            const removeStock = (id) => {
+                setStocks(stocks.filter(stock => stock.id !== id));
+            };
+
+            const addSavingsEntry = () => {
+                if (newSavingsEntry.date && newSavingsEntry.amount) {
+                    const newEntries = [...savingsAccount.entries, {
+                        ...newSavingsEntry,
+                        amount: parseFloat(newSavingsEntry.amount)
+                    }];
+                    setSavingsAccount({
+                        ...savingsAccount,
+                        entries: newEntries
+                    });
+                    setNewSavingsEntry({ date: '', amount: '', type: 'deposit', description: '' });
+                } else {
+                    alert('Пожалуйста, заполните дату и сумму для операции.');
+                }
+            };
+
+            const formatCurrency = (amount) => {
+                return new Intl.NumberFormat('ru-RU', {
+                    style: 'currency',
+                    currency: 'RUB',
+                    minimumFractionDigits: 0
+                }).format(amount);
+            };
+
+            return (
+                <div className="max-w-7xl mx-auto p-6 bg-gray-50 min-h-screen">
+                    <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                            <TrendingUpIcon />
+                            Трекер доходности инвестиций
+                        </h1>
+                        <p className="text-gray-600">Учёт доходности накопительного счёта и акций</p>
+                    </div>
+
+                    {/* Навигация */}
+                    <div className="bg-white rounded-lg shadow mb-6">
+                        <div className="flex border-b">
+                            {[
+                                { id: 'overview', name: 'Обзор', icon: CalculatorIcon },
+                                { id: 'savings', name: 'Накопительный счёт', icon: DollarIcon },
+                                { id: 'stocks', name: 'Акции', icon: TrendingUpIcon }
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`flex items-center gap-2 px-6 py-4 font-medium ${
+                                        activeTab === tab.id
+                                            ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                                            : 'text-gray-600 hover:text-blue-600'
+                                    }`}
+                                >
+                                    <tab.icon />
+                                    {tab.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {activeTab === 'overview' && (
+                        <div className="space-y-6">
+                            {/* Сводка */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-white p-6 rounded-lg shadow">
+                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Общая стоимость портфеля</h3>
+                                    <p className="text-3xl font-bold text-blue-600">
+                                        {formatCurrency(currentSavingsBalance + totalStockValue)}
+                                    </p>
+                                </div>
+                                <div className="bg-white p-6 rounded-lg shadow">
+                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Прибыль по акциям</h3>
+                                    <p className={`text-3xl font-bold ${totalStockProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {formatCurrency(totalStockProfit)}
+                                    </p>
+                                    <p className={`text-sm ${totalStockProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {totalStockCost > 0 ? ((totalStockProfit / totalStockCost) * 100).toFixed(2) : 0}%
+                                    </p>
+                                </div>
+                                <div className="bg-white p-6 rounded-lg shadow">
+                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Ставка по депозиту</h3>
+                                    <p className="text-3xl font-bold text-green-600">{savingsAccount.rate}%</p>
+                                </div>
+                            </div>
+
+                            {/* Диаграмма распределения портфеля */}
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h3 className="text-xl font-semibold mb-4">Распределение портфеля</h3>
+                                <div style={{height: '320px'}}>
+                                    {Recharts && PieChart && Pie && Cell && Tooltip && Legend ? ( // Проверяем, загружен ли Recharts
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={portfolioData}
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    labelLine={false}
+                                                    label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                                    outerRadius={80}
+                                                    fill="#8884d8"
+                                                    dataKey="value"
+                                                >
+                                                    {portfolioData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip 
+                                                    formatter={(value) => formatCurrency(value)}
+                                                />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="text-red-500">График распределения портфеля недоступен из-за проблем с загрузкой Recharts.</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'savings' && (
+                        <div className="space-y-6">
+                            {/* Настройки накопительного счёта */}
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h3 className="text-xl font-semibold mb-4">Настройки накопительного счёта</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Текущий баланс</label>
+                                        <input
+                                            type="text"
+                                            value={formatCurrency(savingsAccount.balance)}
+                                            readOnly
+                                            className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Процентная ставка (%)</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            value={savingsAccount.rate}
+                                            onChange={(e) => setSavingsAccount({...savingsAccount, rate: parseFloat(e.target.value) || 0})}
+                                            className="w-full p-2 border border-gray-300 rounded-md"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Добавление операции */}
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h3 className="text-xl font-semibold mb-4">Добавить операцию</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <input
+                                        type="date"
+                                        value={newSavingsEntry.date}
+                                        onChange={(e) => setNewSavingsEntry({...newSavingsEntry, date: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Сумма"
+                                        value={newSavingsEntry.amount}
+                                        onChange={(e) => setNewSavingsEntry({...newSavingsEntry, amount: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                    <select
+                                        value={newSavingsEntry.type}
+                                        onChange={(e) => setNewSavingsEntry({...newSavingsEntry, type: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    >
+                                        <option value="deposit">Пополнение</option>
+                                        <option value="withdrawal">Снятие</option>
+                                    </select>
+                                    <input
+                                        type="text"
+                                        placeholder="Описание"
+                                        value={newSavingsEntry.description}
+                                        onChange={(e) => setNewSavingsEntry({...newSavingsEntry, description: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                </div>
+                                <button
+                                    onClick={addSavingsEntry}
+                                    className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 flex items-center gap-2"
+                                >
+                                    <PlusIcon />
+                                    Добавить операцию
+                                </button>
+                            </div>
+
+                            {/* График динамики накопительного счёта */}
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h3 className="text-xl font-semibold mb-4">Динамика баланса накопительного счёта</h3>
+                                <div style={{height: '320px'}}>
+                                    {Recharts && LineChart && Line && XAxis && YAxis && CartesianGrid && Tooltip && Legend ? ( // Проверяем, загружен ли Recharts
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={savingsData}>
+                                                <CartesianGrid strokeDasharray="3 3" />
+                                                <XAxis dataKey="date" />
+                                                <YAxis formatter={(value) => formatCurrency(value)} />
+                                                <Tooltip formatter={(value) => formatCurrency(value)} />
+                                                <Legend />
+                                                <Line type="monotone" dataKey="balance" stroke="#8884d8" name="Баланс" activeDot={{ r: 8 }} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="text-red-500">График динамики баланса недоступен из-за проблем с загрузкой Recharts.</div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* История операций */}
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h3 className="text-xl font-semibold mb-4">История операций</h3>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full table-auto">
+                                        <thead>
+                                            <tr className="bg-gray-50">
+                                                <th className="px-4 py-2 text-left">Дата</th>
+                                                <th className="px-4 py-2 text-left">Тип</th>
+                                                <th className="px-4 py-2 text-left">Сумма</th>
+                                                <th className="px-4 py-2 text-left">Описание</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {savingsAccount.entries.sort((a, b) => new Date(b.date) - new Date(a.date)).map((entry, index) => (
+                                                <tr key={index} className="border-b">
+                                                    <td className="px-4 py-2">{entry.date}</td>
+                                                    <td className="px-4 py-2">
+                                                        <span className={`px-2 py-1 rounded-full text-xs ${
+                                                            entry.type === 'deposit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                        }`}>
+                                                            {entry.type === 'deposit' ? 'Пополнение' : 'Снятие'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-2">{formatCurrency(entry.amount)}</td>
+                                                    <td className="px-4 py-2">{entry.description}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'stocks' && (
+                        <div className="space-y-6">
+                            {/* Добавление акции */}
+                            <div className="bg-white p-6 rounded-lg shadow">
+                                <h3 className="text-xl font-semibold mb-4">Добавить акцию</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                    <input
+                                        type="text"
+                                        placeholder="Название"
+                                        value={newStock.name}
+                                        onChange={(e) => setNewStock({...newStock, name: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                    <input
+                                        type="text"
+                                        placeholder="Тикер"
+                                        value={newStock.ticker}
+                                        onChange={(e) => setNewStock({...newStock, ticker: e.target.value.toUpperCase()})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Количество"
+                                        value={newStock.shares}
+                                        onChange={(e) => setNewStock({...newStock, shares: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="Цена покупки"
+                                        value={newStock.buyPrice}
+                                        onChange={(e) => setNewStock({...newStock, buyPrice: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="Текущая цена"
+                                        value={newStock.currentPrice}
+                                        onChange={(e) => setNewStock({...newStock, currentPrice: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                     <input
+                                        type="date"
+                                        placeholder="Дата покупки"
+                                        value={newStock.date}
+                                        onChange={(e) => setNewStock({...newStock, date: e.target.value})}
+                                        className="p-2 border border-gray-300 rounded-md"
+                                    />
+                                </div>
+                                <button
+                                    onClick={addStock}
+                                    className="mt-4 bg-green-600 text-white px
